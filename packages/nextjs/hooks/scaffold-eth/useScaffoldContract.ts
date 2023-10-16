@@ -16,9 +16,11 @@ export const useScaffoldContract = <
 >({
   contractName,
   walletClient,
+  contractAddress, //modifid to replace the addresse that is stored in deployedConrtact
 }: {
   contractName: TContractName;
   walletClient?: TWalletClient | null;
+  contractAddress?: Address | null; //modifid to replace the addresse that is stored in deployedConrtact
 }) => {
   const { data: deployedContractData, isLoading: deployedContractLoading } = useDeployedContractInfo(contractName);
   const publicClient = usePublicClient();
@@ -34,7 +36,8 @@ export const useScaffoldContract = <
       PublicClient,
       TWalletClient
     >({
-      address: deployedContractData.address,
+      
+      address: contractAddress? contractAddress : deployedContractData.address, //modifid to replace the addresse that is stored in deployedConrtact
       abi: deployedContractData.abi as Contract<TContractName>["abi"],
       walletClient: walletClient ? walletClient : undefined,
       publicClient,

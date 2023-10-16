@@ -2,32 +2,142 @@ import Link from "next/link";
 import type { NextPage } from "next";
 import { BugAntIcon, MagnifyingGlassIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { MetaHeader } from "~~/components/MetaHeader";
+import { useScaffoldContract, useScaffoldContractRead, useScaffoldContractWrite, useTransactor } from "~~/hooks/scaffold-eth";
+import { useState } from "react";
+import { EtherInput } from "~~/components/scaffold-eth";
+import Image from "next/image";
+import { parseEther } from "viem";
+import { useAccount, useWalletClient } from "wagmi";
+
+
+
 
 const Home: NextPage = () => {
+  const [pizzaToBuyEthPrice, setPizzaToBuyEthPrice] = useState<bigint>();
+  const [tokenId, setTokenId] =useState<bigint>();
+  const {address:SignerAddress } = useAccount();
+  // const [isLoading, setdisable] =useState<boolean>(false);
+
+  const pizze :{image:string, name:string, description:string, price:string }[] = [
+    {
+      image:"/pizza1.jpg",
+      name:"Marguarrita",
+      description:"Tomatos, cheese, ham",
+      price:"0.1"
+    },
+    {
+      image:"/pizza2.jpg",
+      name:"Quatro fromagi",
+      description:"Tomatos, cheese 1, cheese 2, cheese 3, cheese 4",
+      price:"0.2"
+    },
+    {
+      image:"/pizza3.jpg",
+      name:"La Parma",
+      description:"Tomatos, cheese, ham, olive, mushrooms",
+      price:"0.5"
+    },
+  ]
+  
+  const buyPizza = useScaffoldContractWrite({
+    contractName:"PartnerVendorContract", 
+    functionName:"receivePayement", 
+    args:[tokenId], 
+    value:pizzaToBuyEthPrice, 
+    onBlockConfirmation: () => console.log("block confirmed !"), 
+    },
+  )
+
+  const {data:nftContractAdd} = useScaffoldContractRead({
+    contractName:"PartnerVendorContract",
+    functionName:"LOYALTETHCONTRACT",
+  })
+
+  // const {data:nftContract} = useScaffoldContract({
+  //   contractName:"LoyaltEthCards",
+  // })
+  const {data: walletClient} = useWalletClient();
+  const { data: LoyaltEthContract } = useScaffoldContract({
+    contractName: "LoyaltEthCards",
+    walletClient,
+    contractAddress: nftContractAdd,
+  });
+
+  const getMyTokensIds = async () => {
+    const address = SignerAddress;
+    if (!address) return [];
+    const myTokensIds: bigint[] = [];
+    await LoyaltEthContract?.read.balanceOf([address])
+        .then(
+            async (response) => {
+            console.log("my balance : ", response);
+            if (response) {
+                for (let i=0; i<response; i++) {
+                    const id = await LoyaltEthContract?.read.tokenOfOwnerByIndex([address, BigInt(i)]);
+                    myTokensIds.push(id)
+                }
+            }
+            console.log("myTokensIds : ", myTokensIds)})
+    return myTokensIds;
+  }
+
+ const sendEthTxn = useTransactor();
+
+const handleBuy = async (price:string)=>{
+  const myTokensIds = await getMyTokensIds();
+  let sendTo = await LoyaltEthContract?.read.owner();
+  if (myTokensIds.length>0) {
+    setTokenId(myTokensIds[0]);
+    setPizzaToBuyEthPrice(parseEther(price))
+    await buyPizza.writeAsync()
+    
+  }
+  
+
+    await sendEthTxn({
+      to:sendTo,
+      value:parseEther(price),
+    })
+
+  }
+
   return (
     <>
       <MetaHeader />
       <div className="flex items-center flex-col flex-grow pt-10">
         <div className="px-5">
-          <h1 className="text-center mb-8">
+          <h1 className="text-left mb-8">
             <span className="block text-2xl mb-2">Welcome to</span>
-            <span className="block text-4xl font-bold">Scaffold-ETH 2</span>
+            <span className="block text-4xl font-bold">Pizze Dummies Vendor !</span>
           </h1>
-          <p className="text-center text-lg">
-            Get started by editing{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/nextjs/pages/index.tsx
-            </code>
+          <p className="text-left text-lg">
+            Connect your Wallet to order a Pizza !
           </p>
-          <p className="text-center text-lg">
-            Edit your smart contract{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              YourContract.sol
-            </code>{" "}
-            in{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/hardhat/contracts
-            </code>
+          <p className="text-left text-lg">
+            If you don&#39;t have your LoyaltEth Nft Cards please mint one <a className="text-info" href={""} target="_blank"> here !</a>
+          </p>
+          <p className="text-left text-lg ">
+           {pizze?.map((pizza)=> {
+           return (
+              <div key={pizza.name} className="bg-info my-5 px-5 py-3 rounded-lg" > 
+                
+                <div className="flex flex-row justify-between items-center">
+                  <div className="flex">
+                    <Image className="rounded-full" alt="Pizza" src={`${pizza.image}`} width={100} height={100}/>
+                    <div className="flex flex-col justify-center mx-5">
+                      <h3>{pizza.name}</h3>
+                      <p className="m-0 font-extralight">{pizza.description}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end max-w-[150px] gap-1">
+                    <p className="m-0"><EtherInput onChange={() => pizza.price} value={pizza.price}/></p>
+                    <button className="btn-secondary rounded-full w-[75px]" type="button" disabled={buyPizza?.isError} onClick={ () => handleBuy(pizza.price)}>
+                      Buy
+                    </button>
+                  </div>
+                </div>
+              </div>)}
+           )}
           </p>
         </div>
 
